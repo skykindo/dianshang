@@ -1,0 +1,3 @@
+import { compareEvalBatches } from "@/lib/eval/batch";
+import { getEvalBatch } from "@/lib/eval/store";
+export async function GET(request:Request){const url=new URL(request.url);const leftId=url.searchParams.get("left");const rightId=url.searchParams.get("right");if(!leftId||!rightId)return Response.json({error:{code:"INVALID_INPUT",message:"left 和 right 批次 ID 为必填项。"}},{status:400});const [left,right]=await Promise.all([getEvalBatch(leftId),getEvalBatch(rightId)]);if(!left||!right)return Response.json({error:{code:"EVAL_BATCH_NOT_FOUND",message:"对比批次不存在。"}},{status:404});return Response.json({comparison:compareEvalBatches(left,right),left,right});}

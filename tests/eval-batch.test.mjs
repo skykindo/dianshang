@@ -1,0 +1,22 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+
+const env={ASSETS:{fetch:async()=>new Response("Not found",{status:404})}};
+const ctx={waitUntil(){},passThroughOnException(){}};
+async function worker(){const url=new URL("../dist/server/index.js",import.meta.url);url.searchParams.set("eval-batch-test",`${Date.now()}-${Math.random()}`);return(await import(url.href)).default;}
+async function json(w,path,init){const response=await w.fetch(new Request(`http://localhost${path}`,init),env,ctx);return{response,body:await response.json()};}
+const post=(body)=>({method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)});
+async function terminal(w,id){for(let attempt=0;attempt<100;attempt++){const current=await json(w,`/api/eval/batch/${id}`);assert.equal(current.response.status,200);if(["done","error","cancelled"].includes(current.body.batch.status))return current.body.batch;await new Promise(resolve=>setTimeout(resolve,10));}assert.fail("批次未在预期时间内进入终态");}
+
+test("batch runs exactly selected cases through real agent runs and persists progress",async()=>{
+  const w=await worker();const data=await json(w,"/api/eval");const caseIds=["screenshot-v1-senior-low-sugar","screenshot-v1-slimming-claim","screenshot-v1-prize-scam"];assert.ok(caseIds.every(id=>data.body.enabledCases.some(item=>item.id===id)));
+  const empty=await json(w,"/api/eval/batch/run",post({caseIds:[]}));assert.equal(empty.response.status,400);assert.equal(empty.body.error.code,"EMPTY_CASE_IDS");
+  const invalid=await json(w,"/api/eval/batch/run",post({caseIds:[caseIds[0],"not-a-case"]}));assert.equal(invalid.response.status,400);assert.deepEqual(invalid.body.error.invalidIds,["not-a-case"]);
+  const created=await json(w,"/api/eval/batch/run",post({name:"baseline",versionLabel:"baseline-v1",caseIds,requestKey:"batch-test-baseline"}));assert.equal(created.response.status,202);assert.equal(created.body.batch.total,3);assert.deepEqual(created.body.batch.caseIds,caseIds);assert.ok(created.body.batch.params.agentConfigSnapshot);assert.equal(created.body.batch.params.agentConfigSnapshot.llm.provider,created.body.batch.provider);
+  const batch=await terminal(w,created.body.batchId);assert.equal(batch.status,"done");assert.equal(batch.total,3);assert.deepEqual(batch.caseResults.map(item=>item.caseId),caseIds);assert.equal(batch.total,batch.passed+batch.failed+batch.review+batch.errors);assert.ok(batch.caseResults.every(item=>item.runId&&item.actualReply));assert.deepEqual(batch.caseResults.map(item=>item.status),["PASS","PASS","PASS"]);
+  const firstRun=await json(w,`/api/runs/${batch.caseResults[0].runId}`);assert.equal(firstRun.response.status,200);assert.equal(firstRun.body.provider,batch.params.agentConfigSnapshot.llm.provider);assert.equal(firstRun.body.model,batch.params.agentConfigSnapshot.llm.defaultModel);
+  const stored=globalThis.__snackOpsEvalBatches?.get(batch.id);assert.ok(stored);stored.passed=999;stored.failed=999;const refreshed=await json(w,`/api/eval/batch/${batch.id}`);assert.notEqual(refreshed.body.batch.passed,999);assert.equal(refreshed.body.batch.total,refreshed.body.batch.passed+refreshed.body.batch.failed+refreshed.body.batch.review+refreshed.body.batch.errors);
+  const regression=await json(w,"/api/eval/batch/run",post({name:"risk fix",versionLabel:"risk-fix-v2",baseBatchId:batch.id,requestKey:"batch-test-regression"}));assert.equal(regression.response.status,202);const second=await terminal(w,regression.body.batchId);assert.deepEqual(second.caseIds,caseIds);assert.equal(second.evaluatorHash,batch.evaluatorHash);assert.equal(second.caseSetHash,batch.caseSetHash);
+  const compared=await json(w,`/api/eval/batch/compare?left=${batch.id}&right=${second.id}`);assert.equal(compared.response.status,200);assert.equal(compared.body.comparison.comparable,true);const pass=batch.caseResults.filter(item=>item.status==="PASS").length;const fail=batch.caseResults.filter(item=>item.status==="FAIL").length;assert.equal(compared.body.comparison.leftPassRate,pass+fail?pass/(pass+fail):null);
+  globalThis.__snackOpsEvalBatches.set("legacy-batch",{id:"legacy-batch",name:"历史单条评分",caseIds:[caseIds[0]],results:[batch.caseResults[0]],createdAt:batch.createdAt,completedAt:batch.finishedAt});const legacy=await json(w,"/api/eval/batch/legacy-batch");assert.equal(legacy.response.status,200);assert.equal(legacy.body.batch.status,"done");assert.equal(legacy.body.batch.caseResults.length,1);assert.equal(legacy.body.batch.versionLabel,"legacy");
+});
