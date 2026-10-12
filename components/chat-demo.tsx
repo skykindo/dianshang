@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { FormEvent, useRef, useState } from "react";
 import AdminNav from "@/components/admin-nav";
 import RichReply from "@/components/rich-reply";
@@ -94,14 +93,14 @@ export default function ChatDemo() {
     <AdminNav active="demo" />
     <section className="chat-heading">
       <div><p className="eyebrow">CUSTOMER CHAT DEMO</p><h1>聊天 Demo</h1><p>面向客服对话验证；每条消息仍会经过完整 Agent 链路。如需查看 Planner、Tool 和 Trace，请进入 Agent 控制台。</p></div>
-      <div className="chat-heading-actions"><Link href="/eval">打开评测用例集 ↗</Link><button type="button" onClick={resetConversation} disabled={!messages.length || busy}>新对话</button></div>
+      <div className="chat-heading-actions"><a href="/eval">打开评测用例集 ↗</a><button type="button" onClick={resetConversation} disabled={!messages.length || busy}>新对话</button></div>
     </section>
     <section className="chat-window" aria-label="客服聊天窗口">
       <div className="chat-stream" aria-live="polite">
         {!messages.length && <div className="chat-welcome"><span>SN</span><h2>想咨询什么？</h2><p>可以询问商品、价格、订单、物流或安全风险。</p><div className="chat-suggestions">{examples.map((item) => <button key={item} type="button" onClick={() => setInput(item)}>{item}</button>)}</div></div>}
         {messages.map((message) => <article key={message.id} className={`chat-message ${message.role} ${message.error ? "error" : ""}`}>
           <div className="chat-avatar">{message.role === "user" ? "我" : "SN"}</div>
-          <div><RichReply text={message.content}/>{message.runId && <Link href={`/runs/${message.runId}`}>查看本次 Trace ↗</Link>}</div>
+          <div><RichReply text={message.content}/>{message.runId && <a href={`/runs/${message.runId}`}>查看本次 Trace ↗</a>}</div>
         </article>)}
       </div>
       <form className="chat-composer" onSubmit={submit}>

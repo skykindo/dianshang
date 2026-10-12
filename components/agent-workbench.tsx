@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { FormEvent, useState } from "react";
 import AdminNav from "@/components/admin-nav";
 import type { AgentEvent, ProviderName, RunRecord, RunStep } from "@/lib/agent/types";
@@ -69,7 +68,7 @@ export default function AgentWorkbench() {
       <AdminNav active="home" />
       <section className="hero">
         <div><p className="eyebrow">AGENT CONTROL ROOM</p><h1>从计划到安全回复，每一步都可见</h1><p>用于调试单次运行：Planner 选择能力，Validator 守住边界，Executor 记录真实结果。</p></div>
-        {run?.id && <Link className="detail-link" href={`/runs/${run.id}`}>打开完整 RunRecord ↗</Link>}
+        {run?.id && <a className="detail-link" href={`/runs/${run.id}`}>打开完整 RunRecord ↗</a>}
       </section>
       <div className="workspace-grid">
         <section className="panel composer-panel">

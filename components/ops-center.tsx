@@ -1,10 +1,12 @@
 "use client";
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { AnchorHTMLAttributes } from "react";
 import type { AgentEvent, RunRecord } from "@/lib/agent/types";
 import type { SkillConfig, SkillVersion } from "@/lib/admin/types";
 import type { AbTest, Annotation, Improvement, IssueType, Rating } from "@/lib/ops/types";
 import RichReply from "@/components/rich-reply";
+
+const Link = (props: AnchorHTMLAttributes<HTMLAnchorElement>) => <a {...props} />;
 
 type Overview = { metrics: { total:number; successRate:number; averageDurationMs:number; handoffRate:number }; failedSteps:{name:string;count:number}[]; riskDistribution:{low:number;medium:number;high:number}; runs:RunRecord[] };
 type ImprovementCluster = { key:string; title:string; target:string; description:string; items:Improvement[] };
