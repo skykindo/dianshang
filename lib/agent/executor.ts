@@ -119,7 +119,7 @@ export async function executeAgentRun(input: RunRequest, emit: EventSink = () =>
       context: { question: record.question, toolResults: customerEvidence, executionScore },
     })) as string;
     record.finalReply = reply;
-    record.toolVersions["risk-check"] = tools.find((item) => item.id === "risk-check")?.version ?? "unknown";
+    record.toolVersions["risk-check"] = "system-guard-1.0.0";
     record.riskResult = await addStep("risk-check", "risk-check", { question: record.question, finalReply: reply }, async () => runTool("risk-check", { question: record.question, finalReply: reply }, input.simulateToolFailure)) as RunRecord["riskResult"];
     if (record.riskResult?.blocked) {
       record.finalReply = "这条回复未通过安全检查，已阻止发送。请勿转账或提供验证码，建议联系官方客服或人工处理。";

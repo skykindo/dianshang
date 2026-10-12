@@ -22,9 +22,12 @@ export function enabledCapabilities(all: Capability[], requested?: string[]) {
 
 export function inferMandatoryCapabilities(input: string): string[] {
   const result = new Set<string>();
-  if (/价格|多少钱|便宜|优惠|比价|预算|售价|块钱|元内/.test(input)) result.add("price-query");
-  if (/订单|下单|退货|换货|退款/.test(input)) result.add("order-query");
-  if (/物流|快递|发货|到货|运单/.test(input)) result.add("logistics-query");
+  if (/价格|多少钱|便宜|优惠|比价|预算|售价|块钱|元内/.test(input)) result.add("calculate_price");
+  if (/优惠券|券/.test(input)) result.add("query_coupons");
+  if (/活动|满减|促销/.test(input)) result.add("query_activities");
+  if (/订单|下单/.test(input)) result.add("query_order");
+  if (/退货|换货|退款|售后/.test(input)) result.add("query_return_policy");
+  if (/物流|快递|发货|到货|运单/.test(input)) result.add("track_logistics");
   if (/中奖|一等奖|兑奖|转账|转钱|安全账户|验证码|银行卡|刷单|保证金|扫码|诈骗|降血糖|治疗|治愈|疗效|减肥|瘦身/.test(input)) {
     result.add("risk-check");
     result.add("safety-response");

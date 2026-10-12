@@ -53,10 +53,14 @@ async function setValue<T>(key: string, value: T) {
   memoryConfig.set(key, snapshot);
 }
 
-export async function getSkills() { return getValue<SkillConfig[]>("skills", DEFAULT_SKILLS); }
-export async function getTools() { return getValue<ToolConfig[]>("tools", DEFAULT_TOOLS); }
+const SKILLS_KEY = "skills-v4";
+const TOOLS_KEY = "tools-v4";
+const PLANNER_KEY = "planner-v4";
+
+export async function getSkills() { return getValue<SkillConfig[]>(SKILLS_KEY, DEFAULT_SKILLS); }
+export async function getTools() { return getValue<ToolConfig[]>(TOOLS_KEY, DEFAULT_TOOLS); }
 export async function getPlannerConfig() {
-  const stored = await getValue<PlannerConfig>("planner", DEFAULT_PLANNER);
+  const stored = await getValue<PlannerConfig>(PLANNER_KEY, DEFAULT_PLANNER);
   const enabledTools = Array.isArray(stored.enabledTools) ? stored.enabledTools : DEFAULT_PLANNER.enabledTools;
   return {
     ...DEFAULT_PLANNER,
@@ -143,18 +147,18 @@ export async function saveSkill(
   if (db) {
     await ensureSchema(db);
     await db.prepare("INSERT OR IGNORE INTO admin_config (config_key, value_json, updated_at) VALUES (?, ?, ?)")
-      .bind("skills", JSON.stringify(DEFAULT_SKILLS), new Date().toISOString()).run();
+      .bind(SKILLS_KEY, JSON.stringify(DEFAULT_SKILLS), new Date().toISOString()).run();
     for (let attempt = 0; attempt < 5; attempt++) {
-      const row = await db.prepare("SELECT value_json FROM admin_config WHERE config_key = ?").bind("skills").first<{ value_json: string }>();
+      const row = await db.prepare("SELECT value_json FROM admin_config WHERE config_key = ?").bind(SKILLS_KEY).first<{ value_json: string }>();
       if (!row) throw new Error("无法读取 Skill 配置。");
       const skills = JSON.parse(row.value_json) as SkillConfig[];
       const prepared = prepareSkillSave(skills, skillId, update, changeNote, expectedVersion);
       await db.prepare("INSERT OR IGNORE INTO skill_versions (skill_id, version, snapshot_json, change_note, created_at) VALUES (?, ?, ?, ?, ?)")
         .bind(skillId, prepared.current.version, JSON.stringify(prepared.current), changeNote, prepared.createdAt).run();
       const result = await db.prepare("UPDATE admin_config SET value_json = ?, updated_at = ? WHERE config_key = ? AND value_json = ?")
-        .bind(JSON.stringify(prepared.nextSkills), prepared.createdAt, "skills", row.value_json).run();
+        .bind(JSON.stringify(prepared.nextSkills), prepared.createdAt, SKILLS_KEY, row.value_json).run();
       if (changedRows(result) > 0) {
-        memoryConfig.set("skills", structuredClone(prepared.nextSkills));
+        memoryConfig.set(SKILLS_KEY, structuredClone(prepared.nextSkills));
         if (!memoryVersions.some((item) => item.skillId === skillId && item.version === prepared.current.version)) memoryVersions.push(prepared.snapshot);
         return prepared.next;
       }
@@ -167,10 +171,10 @@ export async function saveSkill(
   globalThis.__snackOpsSkillSaveQueue = new Promise<void>((resolve) => { release = resolve; });
   await previous;
   try {
-    const skills = structuredClone((memoryConfig.get("skills") ?? DEFAULT_SKILLS) as SkillConfig[]);
+    const skills = structuredClone((memoryConfig.get(SKILLS_KEY) ?? DEFAULT_SKILLS) as SkillConfig[]);
     const prepared = prepareSkillSave(skills, skillId, update, changeNote, expectedVersion);
     if (!memoryVersions.some((item) => item.skillId === skillId && item.version === prepared.current.version)) memoryVersions.push(prepared.snapshot);
-    memoryConfig.set("skills", structuredClone(prepared.nextSkills));
+    memoryConfig.set(SKILLS_KEY, structuredClone(prepared.nextSkills));
     return prepared.next;
   } finally {
     release();
@@ -192,11 +196,11 @@ export async function getSkillVersions(skillId: string) {
   return current ? [{ skillId, version: current.version, snapshot: current, changeNote: "当前版本", createdAt: current.updatedAt, current: true }, ...versions] : versions;
 }
 
-export async function saveTools(tools: ToolConfig[]) { await setValue("tools", tools); return tools; }
+export async function saveTools(tools: ToolConfig[]) { await setValue(TOOLS_KEY, tools); return tools; }
 export async function savePlannerConfig(config: Omit<PlannerConfig, "version" | "updatedAt">) {
   const current = await getPlannerConfig();
   const next: PlannerConfig = { ...config, version: current.version + 1, updatedAt: new Date().toISOString() };
-  await setValue("planner", next);
+  await setValue(PLANNER_KEY, next);
   return next;
 }
 export async function saveLlmConfig(config: Omit<LlmConfig, "updatedAt">) {

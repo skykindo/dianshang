@@ -55,10 +55,14 @@ const buildFixturePlan: FixtureGenerator = (options) => {
   const selectedSkills: string[] = [];
   const selectedTools: string[] = [];
   const riskInput = /中奖|一等奖|兑奖|转账|转钱|安全账户|打款|汇款|验证码|诈骗|保证金|降血糖|治疗|治愈|疗效|减肥|瘦身/.test(question);
+  for (const id of mandatory) {
+    if (skills.has(id)) selectedSkills.push(id);
+    if (tools.has(id)) selectedTools.push(id);
+  }
   if (riskInput && skills.has("safety-response")) selectedSkills.push("safety-response");
-  else if (mandatory.some((id) => id.includes("order") || id.includes("logistics")) && skills.has("order-support")) selectedSkills.push("order-support");
-  else if (skills.has("product-recommendation")) selectedSkills.push("product-recommendation");
-  for (const id of mandatory) if (tools.has(id)) selectedTools.push(id);
+  if (riskInput && skills.has("human-handoff-decision")) selectedSkills.push("human-handoff-decision");
+  if (mandatory.some((id) => id.includes("order") || id.includes("logistics") || id.includes("return")) && skills.has("order-support")) selectedSkills.push("order-support");
+  if (!riskInput && !mandatory.some((id) => id.includes("order") || id.includes("logistics") || id.includes("return")) && skills.has("product-recommendation")) selectedSkills.push("product-recommendation");
   if (!riskInput && tools.has("catalog-search") && selectedSkills.includes("product-recommendation")) selectedTools.push("catalog-search");
   const missing = mandatory.filter((id) => !skills.has(id) && !tools.has(id));
   const plan: AgentPlan = {
@@ -98,10 +102,17 @@ function fixturePriceReply(value: FixtureValue) {
 const reportRenderers: Record<string, (value: FixtureValue) => string> = {
   "skill:safety-response": (value) => String(value.customerMessage ?? ""),
   "skill:order-support": (value) => String(value.customerMessage ?? ""),
+  "skill:risk-check": (value) => String(value.customerMessage ?? ""),
   "price-query": fixturePriceReply,
+  "calculate_price": fixturePriceReply,
   "order-query": (value) => `订单 ${String(value.orderId ?? "")}当前状态为“${String(value.status ?? "未知")}”。`,
+  "query_order": (value) => `订单 ${String(value.orderId ?? "")}当前状态为“${String(value.status ?? "未知")}”。`,
+  "query_return_policy": (value) => String(value.policy ?? ""),
   "logistics-query": (value) => `物流单号 ${String(value.trackingNo ?? "")}，当前${String(value.status ?? "状态未知")}；最新进展：${String(value.latest ?? "暂无")}。`,
+  "track_logistics": (value) => `物流单号 ${String(value.trackingNo ?? "")}，当前${String(value.status ?? "状态未知")}；最新进展：${String(value.latest ?? "暂无")}。`,
   "catalog-search": fixtureCatalogReply,
+  "query_products": fixtureCatalogReply,
+  "query_coupons": (value) => `查到可用优惠：${(Array.isArray(value.coupons) ? value.coupons : []).map((item) => String((item as Record<string, unknown>).name ?? "优惠券")).join("、") || "暂无可用优惠券"}。`,
 };
 
 const buildFixtureReport: FixtureGenerator = (options) => {

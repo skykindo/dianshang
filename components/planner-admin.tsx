@@ -134,7 +134,7 @@ export default function PlannerAdmin() {
     </section>}
 
     {activeTab === "mandatory" && <section className="admin-panel planner-tab-panel">
-      <div className="planner-section-copy"><h2>必经 Skill（任何场景都要执行）</h2><p>勾选后 Planner 必须安排这些 Skill，即使 LLM 认为不需要也会强制补上。风险审核必须强制。</p></div>
+      <div className="planner-section-copy"><h2>必经能力（任何场景都要执行）</h2><p>勾选后 Planner 必须安排这些能力，即使 LLM 认为不需要也会强制补上。最终风险检查 Tool 必须强制。</p></div>
       <div className="mandatory-skill-grid">
         {mandatoryOptions.map((item) => {
           const forced = item.id === "risk-check";
@@ -165,7 +165,7 @@ export default function PlannerAdmin() {
     {activeTab === "preview" && <section className="admin-panel planner-tab-panel execution-preview-panel">
       <div className="planner-section-copy with-icon"><span aria-hidden="true">◉</span><div><h2>执行空间预览</h2><p>输入一个示例问题，可以查看 Planner 实际收到的 Skills/Tools 列表和完整 System Prompt。</p></div></div>
       <div className="workspace-preview-form"><input value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="输入示例问题" /><button className="primary-action" disabled={previewing || !question.trim()} onClick={() => void runPreview()}><span aria-hidden="true">▷</span>{previewing ? "预览中…" : "预览"}</button></div>
-      <div className="workspace-metrics"><Metric label="可用 Skill" value={preview?.workspace.availableSkills.length ?? enabledSkills.length} /><Metric label="可用 Tool" value={preview?.workspace.availableTools.length ?? enabledTools.length} /><Metric label="必经 Skill" value={preview?.workspace.mandatoryCapabilities.length ?? unique(["risk-check", ...planner.mandatoryCapabilities]).length} /><Metric label="风控启用" value={(preview?.workspace.riskEnabled ?? planner.enabledTools.includes("risk-check")) ? "是" : "否"} /></div>
+      <div className="workspace-metrics"><Metric label="可用 Skill" value={preview?.workspace.availableSkills.length ?? enabledSkills.length} /><Metric label="可用 Tool" value={preview?.workspace.availableTools.length ?? enabledTools.length} /><Metric label="必经能力" value={preview?.workspace.mandatoryCapabilities.length ?? unique(["risk-check", ...planner.mandatoryCapabilities]).length} /><Metric label="风控启用" value={(preview?.workspace.riskEnabled ?? planner.enabledTools.includes("risk-check")) ? "是" : "否"} /></div>
       <PreviewCapabilityList label="可用 Skills" items={preview?.workspace.availableSkills ?? enabledSkills.map(({ id, name }) => ({ id, name }))} />
       <PreviewCapabilityList label="可用 Tools" items={preview?.workspace.availableTools ?? enabledTools.map(({ id, name }) => ({ id, name }))} />
       {preview ? <>

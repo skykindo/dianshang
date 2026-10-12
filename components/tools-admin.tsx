@@ -1,54 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ToolConfig } from "@/lib/admin/types";
-
-type TestResult = { toolId: string; input: unknown; output: unknown; durationMs: number; status: "SUCCESS" | "ERROR"; error: string | null };
-
-function sampleInput(tool: ToolConfig) {
-  const required = Array.isArray(tool.inputSchema.required) ? tool.inputSchema.required : [];
-  const value: Record<string, string> = {};
-  for (const key of required) if (typeof key === "string") value[key] = key === "finalReply" ? "请不要转账或提供验证码。" : "20 元内有哪些饼干？";
-  return JSON.stringify(value, null, 2);
-}
-
+type TestResult = { status: "SUCCESS" | "ERROR"; output: unknown; error: string | null; durationMs: number };
+function sample(tool: ToolConfig) { const props = (tool.inputSchema.properties ?? {}) as Record<string, { type?: string }>; const result: Record<string, unknown> = {}; for (const [key, value] of Object.entries(props)) { if (key === "keyword") result[key] = "海盐苏打"; else if (key === "question") result[key] = "20 元内有哪些饼干？"; else if (key === "address") result[key] = "上海市浦东新区张江路 1 号"; else if (key.toLowerCase().includes("id")) result[key] = key === "orderId" ? "SO-20260930-001" : "demo-user"; else if (value.type === "number") result[key] = key === "limit" ? 5 : 30; else if (value.type === "array") result[key] = []; } return JSON.stringify(result, null, 2); }
 export default function ToolsAdmin() {
-  const [loading, setLoading] = useState(true); const [error, setError] = useState("");
-  const [tools, setTools] = useState<ToolConfig[]>([]); const [selectedId, setSelectedId] = useState("");
-  const [input, setInput] = useState('{"question":"20 元内有哪些饼干？"}'); const [testing, setTesting] = useState(false);
-  const [result, setResult] = useState<TestResult | null>(null); const [success, setSuccess] = useState("");
-  useEffect(() => { let active = true; void fetch("/api/tools").then(async (response) => {
-    if (!response.ok) throw new Error("加载 Tool 失败。"); const data = await response.json() as { tools: ToolConfig[] };
-    if (active) { setTools(data.tools); setSelectedId(data.tools[0]?.id ?? ""); if (data.tools[0]) setInput(sampleInput(data.tools[0])); setLoading(false); }
-  }).catch((reason) => { if (active) { setError(reason instanceof Error ? reason.message : String(reason)); setLoading(false); } }); return () => { active = false; }; }, []);
-  const selected = tools.find((item) => item.id === selectedId);
-  async function toggle(tool: ToolConfig) {
-    setError(""); setSuccess("");
-    try {
-      const response = await fetch("/api/tools", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: tool.id, enabled: !tool.enabled }) });
-      const data = await response.json() as { tools?: ToolConfig[]; error?: { message?: string } };
-      if (!response.ok || !data.tools) throw new Error(data.error?.message ?? "更新失败。");
-      setTools(data.tools); setSuccess(`${tool.id} 已${tool.enabled ? "禁用" : "启用"}。`);
-    } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
-  }
-  async function testTool() {
-    if (!selected) return; setTesting(true); setResult(null); setError("");
-    try {
-      const parsedInput = JSON.parse(input) as unknown;
-      const response = await fetch(`/api/tools/${selected.id}/test`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ input: parsedInput }) });
-      const data = await response.json() as unknown;
-      if (!response.ok && (!data || typeof data !== "object" || !("toolId" in data))) {
-        const apiError = data && typeof data === "object" && "error" in data ? (data as { error?: { message?: string } }).error : undefined;
-        throw new Error(apiError?.message ?? "Tool 测试失败。");
-      }
-      setResult(data as TestResult);
-    } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
-    finally { setTesting(false); }
-  }
+  const [tools, setTools] = useState<ToolConfig[]>([]); const [selectedId, setSelectedId] = useState(""); const [loading, setLoading] = useState(true); const [input, setInput] = useState("{}"); const [result, setResult] = useState<TestResult | null>(null); const [testing, setTesting] = useState(false); const [message, setMessage] = useState("");
+  useEffect(() => { let active = true; void fetch("/api/tools").then(r => r.json()).then(data => { if (!active) return; const list = (data as { tools: ToolConfig[] }).tools ?? []; setTools(list); setSelectedId(list[0]?.id ?? ""); if (list[0]) setInput(sample(list[0])); setLoading(false); }).catch(() => { if (active) { setMessage("加载 Tool 失败。"); setLoading(false); } }); return () => { active = false; }; }, []);
+  const selected = useMemo(() => tools.find(item => item.id === selectedId), [tools, selectedId]);
+  function choose(tool: ToolConfig) { setSelectedId(tool.id); setInput(sample(tool)); setResult(null); setMessage(""); }
+  async function toggle(tool: ToolConfig) { const response = await fetch("/api/tools", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: tool.id, enabled: !tool.enabled }) }); const data = await response.json() as { tools?: ToolConfig[]; error?: { message?: string } }; if (data.tools) setTools(data.tools); else setMessage(data.error?.message ?? "更新失败。"); }
+  async function test() { if (!selected) return; setTesting(true); setResult(null); setMessage(""); try { const parsed = JSON.parse(input); const response = await fetch(`/api/tools/${selected.id}/test`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ input: parsed }) }); const data = await response.json(); if (!response.ok && !(data as { status?: string }).status) throw new Error((data as { error?: { message?: string } }).error?.message ?? "Tool 测试失败。"); setResult(data as TestResult); } catch (error) { setMessage(error instanceof Error ? error.message : String(error)); } finally { setTesting(false); } }
   if (loading) return <div className="admin-state">Tool 注册表加载中…</div>;
-  return <><section className="admin-hero"><div><p className="eyebrow">SERVER TOOLING</p><h1>Tool 管理</h1><p>测试请求由服务端执行，客户端只展示实际输入、输出和耗时。</p></div></section>{error && <div className="inline-message error">{error}</div>}{success && <div className="inline-message success">{success}</div>}
-    <div className="tool-card-grid">{tools.length ? tools.map((tool) => <article className={`admin-panel tool-card ${selectedId === tool.id ? "selected" : ""}`} key={tool.id}><div className="admin-panel-head"><div><small>{tool.id} · {tool.version}</small><h2>{tool.name}</h2></div><label className="switch"><em className="sr-only">启用 {tool.name}</em><input type="checkbox" checked={tool.enabled} onChange={() => void toggle(tool)} /><span /></label></div><p>{tool.description}</p><details><summary>Input schema</summary><pre>{JSON.stringify(tool.inputSchema, null, 2)}</pre></details><details><summary>Output example</summary><pre>{JSON.stringify(tool.outputExample, null, 2)}</pre></details><button className="select-tool" onClick={() => { setSelectedId(tool.id); setInput(sampleInput(tool)); setResult(null); setError(""); }}>在测试器中打开</button></article>) : <div className="admin-state">Tool 列表为空。</div>}</div>
-    {selected && <section className="admin-panel tool-tester"><div className="admin-panel-head"><div><p className="eyebrow">LIVE SERVER CALL</p><h2>测试 {selected.id}</h2></div><b className={`status ${selected.enabled ? "success" : "error"}`}>{selected.enabled ? "ENABLED" : "DISABLED"}</b></div><label className="full-field">输入 JSON<textarea className="code-input" rows={6} value={input} onChange={(e) => setInput(e.target.value)} /></label><button className="primary-action" disabled={testing || !selected.enabled} onClick={() => void testTool()}>{testing ? "服务端执行中…" : "调用 Tool"}</button>
-      {result && <div className={`test-result ${result.status.toLowerCase()}`}><div><b>{result.status}</b><span>{result.durationMs}ms</span></div><small>REAL INPUT</small><pre>{JSON.stringify(result.input, null, 2)}</pre><small>REAL OUTPUT</small><pre>{JSON.stringify(result.output, null, 2)}</pre>{result.error && <p>{result.error}</p>}</div>}</section>}
-  </>;
+  return <><section className="admin-hero compact-admin-hero registry-hero"><div><h1>Tools 管理</h1><p>共 {tools.filter(x => x.enabled).length}/{tools.length} 启用</p></div></section><div className="registry-layout tool-registry-layout"><aside className="registry-sidebar tool-sidebar"><div className="registry-list">{tools.map(tool => <div className={`registry-list-item tool-item ${selectedId === tool.id ? "selected" : ""}`} key={tool.id}><button onClick={() => choose(tool)}><span><b>{tool.name} <em className={`category-tag c-${tool.category}`}>{tool.category}</em></b><small>{tool.id}</small></span></button><label className="switch orange"><em className="sr-only">启用 {tool.name}</em><input type="checkbox" checked={tool.enabled} onChange={() => void toggle(tool)}/><span/></label></div>)}</div></aside><main className="registry-detail">{selected ? <><header className="tool-detail-head"><div className="title-line"><h2>{selected.name}</h2><em className={`category-tag c-${selected.category}`}>{selected.category}</em><span>{selected.sourceType}</span><b className={selected.enabled ? "enabled" : "disabled"}>{selected.enabled ? "启用" : "停用"}</b></div><p>{selected.description}</p><code>{selected.id}</code></header>{message && <div className="inline-message error">{message}</div>}<div className="tool-meta"><div><span>源码文件</span><code>{selected.sourceFile}</code></div><div><span>数据源</span><code>{selected.dataSource}</code></div></div><section className="detail-card schema-card"><h3>参数 Schema</h3><div className="schema-list">{Object.entries((selected.inputSchema.properties ?? {}) as Record<string, { type?: string; description?: string }>).map(([key, value]) => <div key={key}><code>{key}</code><em>{value.type === "array" ? "string[]" : value.type ?? "unknown"}</em><span>{value.description ?? "—"}</span></div>)}</div></section><section className="detail-card tool-test-card"><header><h3>Tool 测试</h3><button className="orange-action" disabled={!selected.enabled || testing} onClick={() => void test()}>▶ {testing ? "执行中…" : "执行 Tool"}</button></header><div className="test-columns"><label>输入<textarea value={input} onChange={e => setInput(e.target.value)} spellCheck={false}/></label><div><b>输出</b>{result ? <pre>{JSON.stringify(result, null, 2)}</pre> : <div className="debug-empty">执行后显示真实输出</div>}</div></div></section></> : <div className="admin-state">请选择 Tool</div>}</main></div></>;
 }

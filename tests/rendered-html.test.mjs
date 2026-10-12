@@ -85,7 +85,8 @@ test("management APIs persist skill versions and execute a real server tool", as
   const worker = await loadWorker();
   const initial = await jsonRequest(worker, "/api/skills");
   assert.equal(initial.response.status, 200);
-  const current = initial.body.skills.find((item) => item.id === "product-recommendation");
+  assert.equal(initial.body.skills.length, 15);
+  const current = initial.body.skills.find((item) => item.id === "product-substitution");
   assert.ok(current);
 
   const saved = await jsonRequest(worker, "/api/skills", {
@@ -119,14 +120,14 @@ test("management APIs persist skill versions and execute a real server tool", as
   assert.ok(versions.body.versions.some((item) => item.version === current.version));
   assert.ok(versions.body.versions.some((item) => item.current === true));
 
-  const tool = await jsonRequest(worker, "/api/tools/price-query/test", {
+  const tool = await jsonRequest(worker, "/api/tools/calculate_price/test", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ input: { question: "海盐苏打多少钱？" } }),
   });
   assert.equal(tool.response.status, 200);
   assert.equal(tool.body.status, "SUCCESS");
-  assert.equal(tool.body.toolId, "price-query");
+  assert.equal(tool.body.toolId, "calculate_price");
   assert.deepEqual(tool.body.input, { question: "海盐苏打多少钱？" });
   assert.ok(Array.isArray(tool.body.output.quotes));
   assert.equal(typeof tool.body.durationMs, "number");
@@ -170,12 +171,12 @@ test("planner preview follows enabled capabilities and provider switch affects R
     body: JSON.stringify({ question: "海盐苏打现在多少钱？" }),
   });
   assert.equal(preview.response.status, 200);
-  assert.ok(preview.body.plan.selectedTools.includes("price-query"));
+  assert.ok(preview.body.plan.selectedTools.includes("calculate_price"));
   assert.equal(preview.body.validation.valid, true);
 
   const plannerState = await jsonRequest(worker, "/api/planner");
   const planner = plannerState.body.planner;
-  const withoutPrice = { ...planner, enabledTools: planner.enabledTools.filter((id) => id !== "price-query") };
+  const withoutPrice = { ...planner, enabledTools: planner.enabledTools.filter((id) => id !== "calculate_price") };
   const disabled = await jsonRequest(worker, "/api/planner", {
     method: "PUT",
     headers: { "content-type": "application/json" },
@@ -189,7 +190,7 @@ test("planner preview follows enabled capabilities and provider switch affects R
   });
   assert.equal(invalidPreview.response.status, 200);
   assert.equal(invalidPreview.body.validation.valid, false);
-  assert.ok(invalidPreview.body.validation.errors.some((message) => message.includes("price-query")));
+  assert.ok(invalidPreview.body.validation.errors.some((message) => message.includes("calculate_price")));
   const restored = await jsonRequest(worker, "/api/planner", {
     method: "PUT",
     headers: { "content-type": "application/json" },
@@ -212,6 +213,6 @@ test("planner preview follows enabled capabilities and provider switch affects R
   assert.equal(run.response.status, 200);
   assert.equal(run.body.provider, "classroom-fixture");
   assert.equal(run.body.status, "SUCCESS");
-  assert.ok(run.body.steps.some((step) => step.type === "tool" && step.capabilityId === "price-query"));
+  assert.ok(run.body.steps.some((step) => step.type === "tool" && step.capabilityId === "calculate_price"));
   assert.ok(run.body.steps.some((step) => step.type === "risk-check"));
 });

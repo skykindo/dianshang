@@ -27,6 +27,10 @@ export interface ToolConfig {
   id: string;
   name: string;
   description: string;
+  category: "数据查询" | "计算解析" | "知识库" | "外部服务" | "写入操作";
+  sourceType: "本地代码" | "外部服务";
+  sourceFile: string;
+  dataSource: string;
   inputSchema: Record<string, unknown>;
   outputExample: unknown;
   enabled: boolean;
