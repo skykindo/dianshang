@@ -1,13 +1,6 @@
 import { DEFAULT_LLM_CONFIG, DEFAULT_PLANNER, DEFAULT_SKILLS, DEFAULT_TOOLS } from "./defaults";
 import type { LlmConfig, PlannerConfig, SkillConfig, SkillVersion, ToolConfig } from "./types";
-
-type Statement = {
-  bind(...values: unknown[]): Statement;
-  run(): Promise<{ meta?: { changes?: number }; changes?: number }>;
-  first<T>(): Promise<T | null>;
-  all<T>(): Promise<{ results: T[] }>;
-};
-type Database = { prepare(sql: string): Statement };
+import { database, type SqlDatabase } from "../database";
 
 declare global {
   var __snackOpsAdminConfig: Map<string, unknown> | undefined;
@@ -18,14 +11,7 @@ const memoryConfig = globalThis.__snackOpsAdminConfig ??= new Map<string, unknow
 const memoryVersions = globalThis.__snackOpsSkillVersions ??= [];
 globalThis.__snackOpsSkillSaveQueue ??= Promise.resolve();
 
-async function database(): Promise<Database | null> {
-  try {
-    const runtime = await import("cloudflare:workers");
-    return ((runtime.env as unknown as { DB?: Database }).DB) ?? null;
-  } catch { return null; }
-}
-
-async function ensureSchema(db: Database) {
+async function ensureSchema(db: SqlDatabase) {
   await db.prepare("CREATE TABLE IF NOT EXISTS admin_config (config_key TEXT PRIMARY KEY NOT NULL, value_json TEXT NOT NULL, updated_at TEXT NOT NULL)").run();
   await db.prepare("CREATE TABLE IF NOT EXISTS skill_versions (skill_id TEXT NOT NULL, version INTEGER NOT NULL, snapshot_json TEXT NOT NULL, change_note TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY(skill_id, version))").run();
 }
@@ -146,14 +132,14 @@ export async function saveSkill(
   const db = await database();
   if (db) {
     await ensureSchema(db);
-    await db.prepare("INSERT OR IGNORE INTO admin_config (config_key, value_json, updated_at) VALUES (?, ?, ?)")
+    await db.prepare("INSERT INTO admin_config (config_key, value_json, updated_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING")
       .bind(SKILLS_KEY, JSON.stringify(DEFAULT_SKILLS), new Date().toISOString()).run();
     for (let attempt = 0; attempt < 5; attempt++) {
       const row = await db.prepare("SELECT value_json FROM admin_config WHERE config_key = ?").bind(SKILLS_KEY).first<{ value_json: string }>();
       if (!row) throw new Error("无法读取 Skill 配置。");
       const skills = JSON.parse(row.value_json) as SkillConfig[];
       const prepared = prepareSkillSave(skills, skillId, update, changeNote, expectedVersion);
-      await db.prepare("INSERT OR IGNORE INTO skill_versions (skill_id, version, snapshot_json, change_note, created_at) VALUES (?, ?, ?, ?, ?)")
+      await db.prepare("INSERT INTO skill_versions (skill_id, version, snapshot_json, change_note, created_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING")
         .bind(skillId, prepared.current.version, JSON.stringify(prepared.current), changeNote, prepared.createdAt).run();
       const result = await db.prepare("UPDATE admin_config SET value_json = ?, updated_at = ? WHERE config_key = ? AND value_json = ?")
         .bind(JSON.stringify(prepared.nextSkills), prepared.createdAt, SKILLS_KEY, row.value_json).run();

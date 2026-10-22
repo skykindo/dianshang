@@ -1,6 +1,7 @@
 import { createEvalBatch, runEvalBatch } from "@/lib/eval/batch";
 import { getEvalBatch, listEvalBatches, listEvalCases } from "@/lib/eval/store";
 import { parseJsonBody } from "@/lib/http";
+import { waitUntil } from "@vercel/functions";
 
 type Body={name?:unknown;versionLabel?:unknown;changeNote?:unknown;caseIds?:unknown;baseBatchId?:unknown;requestKey?:unknown};
 declare global { var __snackOpsEvalBatchRequests: Map<string,Promise<Awaited<ReturnType<typeof createEvalBatch>>>>|undefined; }
@@ -16,5 +17,5 @@ export async function POST(request:Request){
   const ids=requested??all.filter(item=>item.enabled).map(item=>item.id);const unique=[...new Set(ids)];const byId=new Map(all.map(item=>[item.id,item]));const invalidIds=unique.filter(id=>!byId.has(id));
   if(invalidIds.length)return Response.json({error:{code:"INVALID_CASE_IDS",message:"部分 caseId 不存在。",invalidIds}},{status:400});
   const cases=unique.map(id=>byId.get(id)!);const creation=createEvalBatch({name:body.name as string|undefined,versionLabel:body.versionLabel as string|undefined,changeNote:body.changeNote as string|undefined,cases,requestKey:body.requestKey as string|undefined});if(body.requestKey){if(requests.size>100)requests.delete(requests.keys().next().value!);requests.set(body.requestKey as string,creation);}const batch=await creation;
-  const execution=runEvalBatch(batch.id);try{const runtime=await import("cloudflare:workers");runtime.waitUntil(execution);}catch{void execution;}return Response.json({batchId:batch.id,batch},{status:202});
+  const execution=runEvalBatch(batch.id);try{waitUntil(execution);}catch{void execution;}return Response.json({batchId:batch.id,batch},{status:202});
 }

@@ -1,12 +1,10 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { AnchorHTMLAttributes } from "react";
+import Link from "next/link";
 import type { AgentEvent, RunRecord, RunStep } from "@/lib/agent/types";
 import type { SkillConfig, ToolConfig } from "@/lib/admin/types";
 import type { EvalBatch, EvalBatchComparison, EvalCase, EvalResult, KeywordGroup } from "@/lib/eval/types";
 import RichReply from "@/components/rich-reply";
-
-const Link = (props: AnchorHTMLAttributes<HTMLAnchorElement>) => <a {...props} />;
 
 type Data={cases:EvalCase[];batches:EvalBatch[];skills:SkillConfig[];tools:ToolConfig[]};
 type InlineEvalState={status:"running"|"done"|"error";run:RunRecord|null;result:EvalResult|null;message:string};

@@ -1,146 +1,107 @@
 # SnackOps Agent Workbench
 
-SnackOps 将 Planner、Plan Validator、Skill、Tool、LLM 回复生成和最终风险复核串成同一条可观测主链路。运行通过 SSE 逐步返回，并以 RunRecord 写入 D1。
+SnackOps 将 Planner、Plan Validator、Skill、Tool、LLM 回复生成和最终风险复核串成一条可观测链路。项目现已迁移为标准 Next.js 应用，可部署到 Vercel；线上持久化使用 PostgreSQL。
 
-## Provider 配置
+## 技术栈
 
-- `LLM_PROVIDER=coze`：需要 `COZE_API_TOKEN` 和 `LLM_MODEL`，通过 `coze-coding-dev-sdk` 调用。
-- `LLM_PROVIDER=deepseek`：需要 `DEEPSEEK_API_KEY`；默认使用官方 `https://api.deepseek.com` 和 `deepseek-flash`，也可通过 `DEEPSEEK_BASE_URL`、`DEEPSEEK_MODEL` 覆盖。
-- `LLM_PROVIDER=classroom-fixture`：无外部密钥的确定性课堂演示。fixture 仍经过 Planner、Validator、Skill/Tool、回复生成与 risk-check。
+- Next.js 16 App Router
+- React 19
+- PostgreSQL + Drizzle ORM
+- Vercel Functions（包含 SSE 流式回复和后台评测任务）
+- DeepSeek、Coze 或无需外部密钥的课堂 fixture
 
-显式设置的 `LLM_PROVIDER` / `LLM_MODEL` 优先于管理页中的持久化配置；环境变量生效时，管理页切换会提示当前 Provider 仍被环境锁定。
+## 本地运行
 
-真实 Provider 缺失配置时会返回结构化中文错误，不会自动降级到 fixture。复制 `.env.example` 后按需填写。
-模型调用默认在 30 秒后超时，可通过 `LLM_PROVIDER_TIMEOUT_MS` 调整（允许 100–120000 毫秒）。
-
-## 公开作品集模式
-
-线上页面与 API 均允许匿名访问，工作台、演示页、运营中心、评测中心和配置页面可以直接作为作品集展示。公开部署建议设置 `LLM_PROVIDER=classroom-fixture`，避免访客消耗真实模型额度；如需接入真实 Provider，应先增加限流、配额和滥用防护。
-
-## 开发与验证
+要求 Node.js `>=22.13.0` 和 pnpm。
 
 ```bash
 pnpm install
+cp .env.example .env.local
 pnpm dev
+```
+
+打开 `http://localhost:3000`。本地未配置 `DATABASE_URL` 时，应用使用进程内存数据，重启后重置；如需验证持久化，请配置一个 PostgreSQL 连接串。
+
+主要页面：
+
+- `/`：Agent 工作台
+- `/demo`：客服聊天页
+- `/runs/[runId]`：运行详情
+- `/ops`：运营闭环
+- `/eval`：评测中心
+- `/catalog`：商品数据
+- `/skills`、`/tools`、`/planner`、`/models`：管理页面
+
+## 环境变量
+
+公开演示建议使用：
+
+```env
+LLM_PROVIDER=classroom-fixture
+LLM_PROVIDER_TIMEOUT_MS=30000
+DATABASE_URL=postgresql://user:password@host/database?sslmode=require
+```
+
+使用 DeepSeek：
+
+```env
+LLM_PROVIDER=deepseek
+DEEPSEEK_API_KEY=your_deepseek_api_key
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+DEEPSEEK_MODEL=deepseek-flash
+```
+
+使用 Coze：
+
+```env
+LLM_PROVIDER=coze
+COZE_API_TOKEN=your_coze_personal_access_token
+LLM_MODEL=your_coze_model
+COZE_INTEGRATION_BASE_URL=https://api.coze.cn
+COZE_INTEGRATION_MODEL_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
+```
+
+密钥只配置在 `.env.local` 或 Vercel Environment Variables，不要提交到 Git。
+
+## PostgreSQL
+
+推荐在 Vercel Marketplace 创建 Neon 或 Supabase 数据库，它们会自动注入连接信息。应用兼容标准 `DATABASE_URL`。
+
+应用第一次访问数据库功能时会自动创建缺失表并写入默认课堂数据。也可以显式执行版本化迁移：
+
+```bash
+pnpm db:migrate
+```
+
+修改 [`db/schema.ts`](./db/schema.ts) 后生成新迁移：
+
+```bash
+pnpm db:generate
+```
+
+PostgreSQL 迁移文件位于 `drizzle/postgres/`。根目录原有的 SQLite SQL 仅保留为历史和兼容测试资料。
+
+## 部署到 Vercel
+
+1. 将仓库推送到 GitHub，并在 Vercel 中创建一个新项目。
+2. Framework Preset 选择 `Next.js`；构建命令使用默认的 `pnpm build`。
+3. 在 Vercel Marketplace 创建并连接 PostgreSQL，确认项目环境中存在 `DATABASE_URL`。
+4. 在 Production 环境配置模型相关变量。公开作品集建议先使用 `LLM_PROVIDER=classroom-fixture`。
+5. 部署成功后，在项目 `Settings → Domains` 添加 `kefu.leon-zuopinji.cn`。
+6. 按 Vercel 显示的记录，在腾讯云 DNSPod 新增 `kefu` 的 CNAME；不要修改现有 `@` 或 `www` 记录。
+
+`vercel.json` 将函数区域设置为新加坡 `sin1`，以改善亚洲访问延迟。
+
+## 验证
+
+```bash
 pnpm typecheck
-pnpm lint
 pnpm build
 pnpm test
 ```
 
-工作台为 `/`，简化聊天页为 `/demo`，运行详情为 `/runs/[runId]`，运营闭环位于 `/ops`，真实 Agent 评测位于 `/eval`，课堂商品与订单基础数据位于 `/catalog`。管理后台包含 `/skills`、`/tools`、`/planner` 和 `/models`；所有保存、测试、预览和 Provider 切换都通过服务端 API 完成。
+`pnpm test` 会额外构建一次旧 Worker 兼容测试入口，以复用项目现有的端到端测试；Vercel 生产构建只执行标准 `next build`。
 
-## 课堂重置
+## 上线安全提醒
 
-```bash
-pnpm classroom:reset
-```
-
-该命令只针对项目本地 Wrangler D1，用单个 SQLite `BEGIN IMMEDIATE/COMMIT` 事务恢复默认评测集、Skill、Tool、Planner 和 fixture Provider，并清空 Skill 版本、批次、评分、标注、改进与 A/B 数据。商品、订单和 `agent_runs` 保留。命令会拒绝 `NODE_ENV=production` 或 `CF_PAGES=1` 环境，项目不提供浏览器 reset API。自定义本地测试库可使用：
-
-```bash
-pnpm classroom:reset -- --db /absolute/path/to/local.sqlite
-```
-
-首次访问相关 API 时会在 D1 自动创建 `agent_runs`、`admin_config` 和 `skill_versions` 表，同时保留 `drizzle/0000_agent_runs.sql` 与 `drizzle/0001_admin_config.sql` 供正式迁移使用。模型配置 API 只返回密钥是否就绪，不会返回密钥原文。
-
-## Starter 说明
-
-A clean full-stack starter running on
-[vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and
-Drizzle support.
-
-## Prerequisites
-
-- Node.js `>=22.13.0`
-
-## Quick Start
-
-```bash
-npm install
-npm run dev
-npm run build
-```
-
-This starter does not use `wrangler.jsonc`.
-
-## Included Shape
-
-- edit site code under `app/`
-- `.openai/hosting.json` declares optional Sites D1 and R2 bindings
-- `vite.config.ts` simulates declared bindings for local development
-- `db/schema.ts` starts intentionally empty
-- `examples/d1/` contains an optional D1 example surface
-- `drizzle.config.ts` supports local migration generation when needed
-
-## Workspace Auth Headers
-
-Signed-in visitors receive both `oai-authenticated-user-id` and `oai-authenticated-user-email`. Private Sites require every visitor to sign in; public Sites may also have anonymous visitors, for whom neither header is present.
-
-The user ID is stable for the same user on the same Site and different across Sites. Email and name are intended for display or contact purposes.
-
-SIWC-authenticated workspace sites may also receive
-`oai-authenticated-user-full-name` when the user's SIWC profile has a non-empty
-`name` claim. The full-name value is percent-encoded UTF-8 and is accompanied by
-`oai-authenticated-user-full-name-encoding: percent-encoded-utf-8`.
-
-Treat the full name as optional and fall back to email when it is absent:
-
-```tsx
-import { headers } from "next/headers";
-
-export default async function Home() {
-  const requestHeaders = await headers();
-  const userId = requestHeaders.get("oai-authenticated-user-id");
-  const email = requestHeaders.get("oai-authenticated-user-email");
-  const encodedFullName = requestHeaders.get("oai-authenticated-user-full-name");
-  const fullName =
-    encodedFullName &&
-    requestHeaders.get("oai-authenticated-user-full-name-encoding") ===
-      "percent-encoded-utf-8"
-      ? decodeURIComponent(encodedFullName)
-      : null;
-
-  const displayName = fullName ?? email;
-  // ...
-}
-```
-
-## Optional Dispatch-Owned ChatGPT Sign-In
-
-Import the ready-to-use helpers from `app/chatgpt-auth.ts` when the site needs
-optional or required ChatGPT sign-in:
-
-- Use `getChatGPTUser()` for optional signed-in UI.
-- Use `requireChatGPTUser(returnTo)` for server-rendered pages that should send
-  anonymous visitors through Sign in with ChatGPT.
-- Use `chatGPTSignInPath(returnTo)` and `chatGPTSignOutPath(returnTo)` for
-  browser links or actions.
-- Pass a same-origin relative `returnTo` path for the destination after sign-in
-  or sign-out. The helper validates and safely encodes it.
-- Mark protected pages with `export const dynamic = "force-dynamic"` because
-  they depend on per-request identity headers.
-
-Dispatch owns `/signin-with-chatgpt`, `/signout-with-chatgpt`, `/callback`, the
-OAuth cookies, and identity header injection. Do not implement app routes for
-those reserved paths. Routes that do not import and call the helper remain
-anonymous-compatible.
-
-SIWC establishes identity only; it does not prove workspace membership. Use the
-Sites hosting platform's access policy controls for workspace-wide restrictions,
-or enforce explicit server-side membership or allowlist checks.
-
-Use SIWC for account pages, user-specific dashboards, saved records, and write
-actions tied to the current ChatGPT user. Leave public content anonymous.
-
-## Useful Commands
-
-- `npm run dev`: start local development
-- `npm run build`: verify the vinext build output
-- `npm test`: build the starter and verify its rendered loading skeleton
-- `npm run db:generate`: generate Drizzle migrations after schema changes
-
-## Learn More
-
-- [vinext Documentation](https://github.com/cloudflare/vinext)
-- [Drizzle D1 Guide](https://orm.drizzle.team/docs/get-started/d1-new)
+当前作品集模式允许匿名访问页面和 API，管理接口也尚未区分管理员。若使用真实模型 Provider，公开上线前应增加管理员鉴权、请求限流和调用配额；否则建议保持 `classroom-fixture`，避免访客产生真实模型费用或修改管理数据。

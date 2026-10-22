@@ -1,30 +1,21 @@
 import { CLASSROOM_CATALOG, type CatalogProduct } from "./catalog";
 import { calculateGrossMargin } from "./catalog-sanitize";
-
-type Statement = { bind(...values: unknown[]): Statement; run(): Promise<unknown>; first<T>(): Promise<T | null>; all<T>(): Promise<{ results: T[] }> };
-type Database = { prepare(sql: string): Statement };
+import { database, type SqlDatabase } from "./database";
 
 declare global { var __snackOpsProducts: Map<string, CatalogProduct> | undefined; }
 const memory = globalThis.__snackOpsProducts ??= new Map(CLASSROOM_CATALOG.map((item) => [item.sku, structuredClone(item)]));
 
-async function database(): Promise<Database | null> {
-  try {
-    const runtime = await import("cloudflare:workers");
-    return ((runtime.env as unknown as { DB?: Database }).DB) ?? null;
-  } catch { return null; }
-}
-
-async function ensureSchema(db: Database) {
+async function ensureSchema(db: SqlDatabase) {
   await db.prepare("CREATE TABLE IF NOT EXISTS business_products (sku TEXT PRIMARY KEY NOT NULL, created_at TEXT NOT NULL, record_json TEXT NOT NULL)").run();
   await db.prepare("CREATE TABLE IF NOT EXISTS business_meta (meta_key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL)").run();
   const initialized = await db.prepare("SELECT value FROM business_meta WHERE meta_key = 'products_initialized'").first<{ value: string }>();
   if (!initialized) {
     for (const item of CLASSROOM_CATALOG) await writeProduct(db, item);
-    await db.prepare("INSERT INTO business_meta (meta_key, value) VALUES ('products_initialized', '1')").run();
+    await db.prepare("INSERT INTO business_meta (meta_key, value) VALUES ('products_initialized', '1') ON CONFLICT DO NOTHING").run();
   }
 }
 
-async function writeProduct(db: Database, item: CatalogProduct) {
+async function writeProduct(db: SqlDatabase, item: CatalogProduct) {
   await db.prepare("INSERT INTO business_products (sku, created_at, record_json) VALUES (?, ?, ?) ON CONFLICT(sku) DO UPDATE SET record_json=excluded.record_json")
     .bind(item.sku, new Date().toISOString(), JSON.stringify(item)).run();
 }

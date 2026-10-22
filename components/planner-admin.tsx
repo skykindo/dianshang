@@ -178,7 +178,7 @@ export default function PlannerAdmin() {
 
 function ToolGroup({ title, description, group, planner, tools, onToggle }: { title: string; description: string; group: "base" | "pricing"; planner: PlannerConfig; tools: ToolConfig[]; onToggle: (group: "base" | "pricing", id: string) => void }) {
   return <section className="admin-panel planner-tab-panel tool-group-panel"><div className="planner-section-copy"><h2>{title}</h2><p>{description}</p></div><div className="tool-group-grid">{tools.filter((tool) => tool.id !== "risk-check").map((tool) => {
-    return <label className={!tool.enabled ? "muted" : ""} key={tool.id}><input type="checkbox" disabled={!tool.enabled} checked={planner.toolGroups[group].includes(tool.id)} onChange={() => onToggle(group, tool.id)} /><span><b>{tool.name}</b><small>{tool.id}</small></span></label>;
+    return <label className={!tool.enabled ? "muted" : ""} key={tool.id}><input aria-label={`${title}：${tool.name}`} type="checkbox" disabled={!tool.enabled} checked={planner.toolGroups[group].includes(tool.id)} onChange={() => onToggle(group, tool.id)} /><span><b>{tool.name}</b><small>{tool.id}</small></span></label>;
   })}</div></section>;
 }
 

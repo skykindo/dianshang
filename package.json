@@ -1,25 +1,30 @@
 {
-  "name": "site-creator-vinext-starter",
+  "name": "snackops-vercel",
   "version": "0.1.0",
   "private": true,
   "engines": {
     "node": ">=22.13.0"
   },
   "scripts": {
-    "dev": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext dev",
-    "build": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext build",
-    "start": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext start",
-    "test": "pnpm build && node --test tests/*.test.mjs",
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "build:worker-test": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext build && next typegen",
+    "test": "pnpm build && pnpm build:worker-test && node --test tests/*.test.mjs",
     "test:core": "node --test tests/*.test.mjs",
     "classroom:reset": "node --experimental-strip-types scripts/classroom-reset.ts",
     "catalog:import": "node --experimental-strip-types scripts/catalog-import.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "node --experimental-strip-types scripts/migrate-postgres.ts"
   },
   "dependencies": {
+    "@vercel/functions": "^3.4.3",
     "coze-coding-dev-sdk": "0.7.32",
     "drizzle-orm": "0.45.2",
+    "next": "16.2.6",
+    "pg": "8.16.3",
     "react": "19.2.6",
     "react-dom": "19.2.6"
   },
@@ -30,6 +35,7 @@
     "@next/eslint-plugin-next": "16.2.6",
     "@tailwindcss/postcss": "4.2.1",
     "@types/node": "22.19.19",
+    "@types/pg": "^8.15.5",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "6.0.2",

@@ -1,12 +1,10 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { AnchorHTMLAttributes } from "react";
+import Link from "next/link";
 import type { AgentEvent, RunRecord } from "@/lib/agent/types";
 import type { SkillConfig, SkillVersion } from "@/lib/admin/types";
 import type { AbTest, Annotation, Improvement, IssueType, Rating } from "@/lib/ops/types";
 import RichReply from "@/components/rich-reply";
-
-const Link = (props: AnchorHTMLAttributes<HTMLAnchorElement>) => <a {...props} />;
 
 type Overview = { metrics: { total:number; successRate:number; averageDurationMs:number; handoffRate:number }; failedSteps:{name:string;count:number}[]; riskDistribution:{low:number;medium:number;high:number}; runs:RunRecord[] };
 type ImprovementCluster = { key:string; title:string; target:string; description:string; items:Improvement[] };
@@ -23,7 +21,7 @@ export default function OpsCenter() {
   const reload = useCallback(async () => { const jobs = { overview:read<Overview>("/api/ops/overview"), ratings:read<{ratings:Rating[]}>("/api/ratings"), annotations:read<{annotations:Annotation[]}>("/api/annotations"), improvements:read<{improvements:Improvement[]}>("/api/improvements"), skills:read<{skills:SkillConfig[]}>("/api/skills"), abTests:read<{abTests:AbTest[]}>("/api/ab-tests") }; const entries=Object.entries(jobs); const results=await Promise.allSettled(entries.map(([,job])=>job)); const nextErrors:Record<string,string>={}; results.forEach((result,index)=>{const key=entries[index][0]; if(result.status==="rejected") nextErrors[key]="该模块暂时无法加载，请重试。"; else { const value=result.value as never; if(key==="overview") { const data=value as Overview; setOverview(data); const first=data.runs[0]?.id??""; if(first){setRating((v)=>v.runId?v:{...v,runId:first});setAnnotation((v)=>v.runId?v:{...v,runId:first});} } if(key==="ratings") setRatings((value as {ratings:Rating[]}).ratings); if(key==="annotations") setAnnotations((value as {annotations:Annotation[]}).annotations); if(key==="improvements") setImprovements((value as {improvements:Improvement[]}).improvements); if(key==="skills") setSkills((value as {skills:SkillConfig[]}).skills); if(key==="abTests") setAbTests((value as {abTests:AbTest[]}).abTests); }}); setErrors(nextErrors); }, []);
   const loadRollbackVersions = useCallback(async () => { setRollbackLoading(true); const results=await Promise.all(skills.map(async skill=>{try{const data=await read<{versions:SkillVersion[]}>(`/api/skills/${skill.id}/versions`);return [skill.id,data.versions] as const;}catch{return [skill.id,[]] as const;}}));setRollbackVersions(Object.fromEntries(results));setRollbackLoading(false); }, [skills]);
   useEffect(()=>{const timer=window.setTimeout(()=>void reload(),0);return()=>window.clearTimeout(timer);},[reload]);
-  useEffect(()=>{if(tab==="rollback"&&skills.length)void loadRollbackVersions();},[tab,skills.length,loadRollbackVersions]);
+  useEffect(()=>{if(tab!=="rollback"||!skills.length)return;const timer=window.setTimeout(()=>void loadRollbackVersions(),0);return()=>window.clearTimeout(timer);},[tab,skills.length,loadRollbackVersions]);
   async function post(path:string,body:unknown){setNotice("处理中…");const response=await fetch(path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});const data=await response.json() as {error?:{message?:string}};if(!response.ok)throw new Error(data.error?.message??"操作失败");return data as Record<string,unknown>;}
   async function createRating(){try{await post("/api/ratings",rating);setNotice("评分已保存；低分样本已进入改进建议。");await reload();}catch(e){setNotice(e instanceof Error?e.message:String(e));}}
   async function createAnnotation(){try{await post("/api/annotations",annotation);setNotice("标注已持久化保存。");await reload();}catch(e){setNotice(e instanceof Error?e.message:String(e));}}

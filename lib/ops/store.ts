@@ -1,7 +1,5 @@
 import type { AbTest, Annotation, Improvement, Rating } from "./types";
-
-type Statement = { bind(...values: unknown[]): Statement; run(): Promise<unknown>; all<T>(): Promise<{ results: T[] }> };
-type Database = { prepare(sql: string): Statement };
+import { database, type SqlDatabase } from "../database";
 type Entity = Rating | Annotation | Improvement | AbTest;
 
 declare global {
@@ -15,11 +13,7 @@ const annotations = globalThis.__snackOpsAnnotations ??= new Map();
 const improvements = globalThis.__snackOpsImprovements ??= new Map();
 const abTests = globalThis.__snackOpsAbTests ??= new Map();
 
-async function database(): Promise<Database | null> {
-  try { const runtime = await import("cloudflare:workers"); return ((runtime.env as unknown as { DB?: Database }).DB) ?? null; }
-  catch { return null; }
-}
-async function ensureSchema(db: Database) {
+async function ensureSchema(db: SqlDatabase) {
   await db.prepare("CREATE TABLE IF NOT EXISTS ops_ratings (id TEXT PRIMARY KEY NOT NULL, run_id TEXT NOT NULL, score INTEGER NOT NULL, created_at TEXT NOT NULL, record_json TEXT NOT NULL)").run();
   await db.prepare("CREATE INDEX IF NOT EXISTS ops_ratings_run_idx ON ops_ratings(run_id, created_at DESC)").run();
   await db.prepare("CREATE TABLE IF NOT EXISTS ops_annotations (id TEXT PRIMARY KEY NOT NULL, run_id TEXT NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL, record_json TEXT NOT NULL)").run();
