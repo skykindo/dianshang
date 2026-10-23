@@ -1,5 +1,5 @@
-import AgentWorkbench from "@/components/agent-workbench";
+import ChatDemo from "@/components/chat-demo";
 
 export default function Home() {
-  return <AgentWorkbench />;
+  return <ChatDemo />;
 }
